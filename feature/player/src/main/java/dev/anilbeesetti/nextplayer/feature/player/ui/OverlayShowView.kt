@@ -87,3 +87,4 @@ enum class OverlayView {
     PLAYLIST,
     CHAPTER_SELECTOR,
 }
+
