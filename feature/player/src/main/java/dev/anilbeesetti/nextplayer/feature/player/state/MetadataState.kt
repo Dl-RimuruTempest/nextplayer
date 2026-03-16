@@ -7,9 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.media3.common.Metadata
 import androidx.media3.common.Player
-import androidx.media3.common.metadata.ChapterFrame
 import androidx.media3.common.listen
 
 data class Chapter(
@@ -28,6 +26,7 @@ fun rememberMetadataState(player: Player): MetadataState {
 class MetadataState(private val player: Player) {
     var title: String? by mutableStateOf(null)
         private set
+
     var chapters: List<Chapter> by mutableStateOf(emptyList())
         private set
 
@@ -47,23 +46,15 @@ class MetadataState(private val player: Player) {
     }
 
     private fun extractChapters(): List<Chapter> {
-        val metadata = player.currentStaticMetadata ?: return emptyList()
-        
+        val mediaChapters = player.mediaMetadata.chapters
+        if (mediaChapters.isNullOrEmpty()) return emptyList()
         val result = mutableListOf<Chapter>()
-        for (i in 0 until metadata.length()) {
-            val entry = metadata[i]
-            if (entry is ChapterFrame) {
-                val chapterTitle = entry.title?.takeIf { it.isNotBlank() }
-                    ?: "Chapter ${result.size + 1}"
-                // ChapterFrame stores time in microseconds, convert to milliseconds
-                val startTimeMs = entry.startTimeUs / 1000L
-                result.add(
-                    Chapter(
-                        title = chapterTitle,
-                        startPositionMs = startTimeMs
-                    )
-                )
-            }
+        var startMs = 0L
+        for (chapter in mediaChapters) {
+            val chapterTitle = chapter.title?.toString()?.takeIf { it.isNotBlank() }
+                ?: "Chapter ${result.size + 1}"
+            result.add(Chapter(title = chapterTitle, startPositionMs = startMs))
+            startMs += chapter.durationMs
         }
         return result
     }
