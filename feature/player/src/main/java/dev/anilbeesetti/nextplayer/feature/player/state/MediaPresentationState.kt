@@ -115,37 +115,40 @@ class MediaPresentationState(
     }
 
     private fun updateChapters() {
-        val metadata = player.mediaMetadata
         val chapterList = mutableListOf<Chapter>()
-        val count = metadata.extras?.getInt("chapter_count", 0) ?: 0
-        if (count > 0) {
-            for (i in 0 until count) {
-                val title = metadata.extras?.getString("chapter_title_$i") ?: "Chapter ${i + 1}"
-                val startMs = metadata.extras?.getLong("chapter_start_$i") ?: continue
-                chapterList.add(Chapter(title = title, startPositionMs = startMs))
+        try {
+            val timeline = player.currentTimeline
+            if (timeline.isEmpty) {
+                chapters = emptyList()
+                return
             }
-        }
-        // Also try reading from chapter cue points via the timeline
-        if (chapterList.isEmpty()) {
-            try {
-                val timeline = player.currentTimeline
-                if (!timeline.isEmpty) {
-                    val periodCount = timeline.periodCount
-                    if (periodCount > 1) {
-                        val period = Timeline.Period()
-                        for (i in 0 until periodCount) {
-                            timeline.getPeriod(i, period)
-                            val title = period.id?.toString() ?: "Chapter ${i + 1}"
-                            val startMs = period.positionInWindowUs / 1000
-                            if (startMs >= 0) {
-                                chapterList.add(Chapter(title = title, startPositionMs = startMs))
-                            }
-                        }
-                    }
+            val window = Timeline.Window()
+            timeline.getWindow(player.currentMediaItemIndex, window)
+            // Only use periods that are explicitly named chapters (have non-numeric, non-null IDs)
+            // and skip if there's only 1 period (that's just the video itself, not chapters)
+            val periodCount = timeline.periodCount
+            if (periodCount <= 1) {
+                chapters = emptyList()
+                return
+            }
+            val period = Timeline.Period()
+            for (i in 0 until periodCount) {
+                timeline.getPeriod(i, period, true)
+                val title = when {
+                    period.id != null && period.id.toString().isNotBlank() -> period.id.toString()
+                    else -> "Chapter ${i + 1}"
                 }
-            } catch (_: Exception) {}
+                val startMs = period.positionInWindowUs / 1000
+                // Only add if this period starts within the window bounds
+                if (startMs >= 0 && startMs < window.durationUs / 1000) {
+                    chapterList.add(Chapter(title = title, startPositionMs = startMs))
+                }
+            }
+            // Only expose chapters if we found more than 1 — a single period is not a chapter list
+            chapters = if (chapterList.size > 1) chapterList else emptyList()
+        } catch (_: Exception) {
+            chapters = emptyList()
         }
-        chapters = chapterList
     }
 }
 
@@ -155,5 +158,5 @@ val MediaPresentationState.positionFormatted: String
 val MediaPresentationState.durationFormatted: String
     get() = duration.milliseconds.formatted()
 
-val MediaPresentationState.pendingPositionFormatted: String
-    get() = (duration - position).milliseconds.formatted()
+val MediaPresentationState.remainingPositionFormatted: String
+    get() = "-" + (duration - position).milliseconds.formatted()
