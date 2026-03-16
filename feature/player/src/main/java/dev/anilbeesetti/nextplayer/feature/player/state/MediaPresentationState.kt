@@ -115,40 +115,31 @@ class MediaPresentationState(
     }
 
     private fun updateChapters() {
+    try {
+        val metadata = player.currentMediaMetadata
+
         val chapterList = mutableListOf<Chapter>()
-        try {
-            val timeline = player.currentTimeline
-            if (timeline.isEmpty) {
-                chapters = emptyList()
-                return
-            }
-            val window = Timeline.Window()
-            timeline.getWindow(player.currentMediaItemIndex, window)
-            // Only use periods that are explicitly named chapters (have non-numeric, non-null IDs)
-            // and skip if there's only 1 period (that's just the video itself, not chapters)
-            val periodCount = timeline.periodCount
-            if (periodCount <= 1) {
-                chapters = emptyList()
-                return
-            }
-            val period = Timeline.Period()
-            for (i in 0 until periodCount) {
-                timeline.getPeriod(i, period, true)
-                val title = when {
-                    period.id != null && period.id.toString().isNotBlank() -> period.id.toString()
-                    else -> "Chapter ${i + 1}"
-                }
-                val startMs = period.positionInWindowUs / 1000
-                // Only add if this period starts within the window bounds
-                if (startMs >= 0 && startMs < window.durationUs / 1000) {
-                    chapterList.add(Chapter(title = title, startPositionMs = startMs))
+
+        metadata.extras?.let { bundle ->
+            val chapterTitles = bundle.getStringArrayList("chapter_titles")
+            val chapterTimes = bundle.getLongArray("chapter_times")
+
+            if (chapterTitles != null && chapterTimes != null) {
+                for (i in chapterTitles.indices) {
+                    chapterList.add(
+                        Chapter(
+                            title = chapterTitles[i],
+                            startPositionMs = chapterTimes[i]
+                        )
+                    )
                 }
             }
-            // Only expose chapters if we found more than 1 — a single period is not a chapter list
-            chapters = if (chapterList.size > 1) chapterList else emptyList()
-        } catch (_: Exception) {
-            chapters = emptyList()
         }
+
+        chapters = if (chapterList.size > 1) chapterList else emptyList()
+
+    } catch (_: Exception) {
+        chapters = emptyList()
     }
 }
 
