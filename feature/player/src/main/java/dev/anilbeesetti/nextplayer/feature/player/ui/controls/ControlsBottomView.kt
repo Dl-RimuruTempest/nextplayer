@@ -3,7 +3,6 @@ package dev.anilbeesetti.nextplayer.feature.player.ui.controls
 import androidx.annotation.OptIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,8 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,11 +27,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,7 +42,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -57,15 +49,17 @@ import androidx.media3.common.util.UnstableApi
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
 import dev.anilbeesetti.nextplayer.feature.player.LocalUseMaterialYouControls
-import dev.anilbeesetti.nextplayer.feature.player.buttons.LoopButton
+import dev.anilbeesetti.nextplayer.feature.player.buttons.NextButton
+import dev.anilbeesetti.nextplayer.feature.player.buttons.PlayPauseButton
 import dev.anilbeesetti.nextplayer.feature.player.buttons.PlayerButton
+import dev.anilbeesetti.nextplayer.feature.player.buttons.PreviousButton
+import dev.anilbeesetti.nextplayer.feature.player.buttons.SeekBackButton
+import dev.anilbeesetti.nextplayer.feature.player.buttons.SeekForwardButton
 import dev.anilbeesetti.nextplayer.feature.player.buttons.ShuffleButton
-import dev.anilbeesetti.nextplayer.feature.player.extensions.noRippleClickable
-import dev.anilbeesetti.nextplayer.feature.player.state.Chapter
 import dev.anilbeesetti.nextplayer.feature.player.state.MediaPresentationState
 import dev.anilbeesetti.nextplayer.feature.player.state.durationFormatted
-import dev.anilbeesetti.nextplayer.feature.player.state.pendingPositionFormatted
 import dev.anilbeesetti.nextplayer.feature.player.state.positionFormatted
+import dev.anilbeesetti.nextplayer.feature.player.state.remainingPositionFormatted
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -73,13 +67,9 @@ fun ControlsBottomView(
     modifier: Modifier = Modifier,
     player: Player,
     mediaPresentationState: MediaPresentationState,
-    currentChapter: Chapter?,
-    hasChapters: Boolean,
-    onChaptersClick: () -> Unit,
+    seekIncrementMs: Long,
     onSeek: (Long) -> Unit,
     onSeekEnd: () -> Unit,
-    onRotateClick: () -> Unit,
-    onPlayInBackgroundClick: () -> Unit,
     onLockControlsClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
@@ -93,78 +83,32 @@ fun ControlsBottomView(
             .padding(bottom = 16.dp.takeIf { systemBarsPadding.calculateBottomPadding() == 0.dp } ?: 0.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // Time row: position/duration + chapters button + rotate button
+        // Time row: position/duration + remaining time
         Row(
             modifier = Modifier.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            var showPendingPosition by rememberSaveable { mutableStateOf(false) }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.noRippleClickable {
-                    showPendingPosition = !showPendingPosition
-                },
-            ) {
-                Text(
-                    text = when (showPendingPosition) {
-                        true -> "-${mediaPresentationState.pendingPositionFormatted}"
-                        false -> mediaPresentationState.positionFormatted
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                )
-                Text(
-                    text = " / ",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                )
-                Text(
-                    text = mediaPresentationState.durationFormatted,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                )
-            }
-
+            Text(
+                text = mediaPresentationState.positionFormatted,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+            )
+            Text(
+                text = " / ",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+            )
+            Text(
+                text = mediaPresentationState.durationFormatted,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+            )
             Spacer(modifier = Modifier.weight(1f))
-
-            // Chapters button — only show if video has chapters
-            if (hasChapters) {
-                PlayerButton(
-                    modifier = Modifier.widthIn(min = 30.dp, max = 140.dp),
-                    onClick = onChaptersClick,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_playlist),
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            text = currentChapter?.title ?: "Chapters",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-
-            // Rotate button
-            PlayerButton(
-                modifier = Modifier.size(30.dp),
-                onClick = onRotateClick,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_screen_rotation),
-                    contentDescription = null,
-                    modifier = Modifier.size(12.dp),
-                )
-            }
+            Text(
+                text = mediaPresentationState.remainingPositionFormatted,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+            )
         }
 
         // Seekbar
@@ -179,13 +123,12 @@ fun ControlsBottomView(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Left group: Lock, Loop, Shuffle, Play in Background
+            // Left group: Lock, Shuffle
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier.weight(1f),
             ) {
                 PlayerButton(onClick = onLockControlsClick) {
                     Icon(
@@ -193,20 +136,27 @@ fun ControlsBottomView(
                         contentDescription = null,
                     )
                 }
-                LoopButton(player = player)
                 ShuffleButton(player = player)
-                PlayerButton(onClick = onPlayInBackgroundClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_headset),
-                        contentDescription = null,
-                    )
-                }
+            }
+
+            // Middle group: seek back, previous, play/pause, next, seek forward
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                modifier = Modifier.weight(2f),
+            ) {
+                SeekBackButton(player = player, seekIncrementMs = seekIncrementMs)
+                PreviousButton(player = player)
+                PlayPauseButton(player = player)
+                NextButton(player = player)
+                SeekForwardButton(player = player, seekIncrementMs = seekIncrementMs)
             }
 
             // Right group: Subtitle, Audio
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                modifier = Modifier.weight(1f),
             ) {
                 PlayerButton(onClick = onSubtitleClick) {
                     Icon(
@@ -289,13 +239,11 @@ private fun MaterialYouSlider(
                 val range = (max - min).takeIf { it > 0f } ?: 1f
                 val playedFraction = ((sliderState.value - min) / range).coerceIn(0f, 1f)
                 val playedPixels = size.width * playedFraction
-
                 val endCornerRadius = size.height / 2f
                 val insideCornerRadius = 2.dp.toPx()
                 val gapHalf = trackThumbGapWidth.toPx() / 2f
                 val leftEnd = (playedPixels - gapHalf).coerceIn(0f, size.width)
                 val rightStart = (playedPixels + gapHalf).coerceIn(0f, size.width)
-
                 if (leftEnd > 0f) {
                     drawRoundedRect(
                         offset = Offset(0f, 0f),
