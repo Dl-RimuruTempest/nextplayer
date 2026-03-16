@@ -10,6 +10,11 @@ import androidx.compose.runtime.setValue
 import androidx.media3.common.Player
 import androidx.media3.common.listen
 
+data class Chapter(
+    val title: String,
+    val startPositionMs: Long,
+)
+
 @Composable
 fun rememberMetadataState(player: Player): MetadataState {
     val metadataState = remember { MetadataState(player) }
@@ -22,12 +27,35 @@ class MetadataState(private val player: Player) {
     var title: String? by mutableStateOf(null)
         private set
 
+    var chapters: List<Chapter> by mutableStateOf(emptyList())
+        private set
+
     suspend fun observe() {
         title = player.mediaMetadata.title?.toString()
+        chapters = extractChapters()
         player.listen { events ->
-            if (events.containsAny(Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+            if (events.containsAny(
+                    Player.EVENT_MEDIA_METADATA_CHANGED,
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                )
+            ) {
                 title = player.mediaMetadata.title?.toString()
+                chapters = extractChapters()
             }
         }
+    }
+
+    private fun extractChapters(): List<Chapter> {
+        val mediaChapters = player.mediaMetadata.chapters
+        if (mediaChapters.isNullOrEmpty()) return emptyList()
+        val result = mutableListOf<Chapter>()
+        var startMs = 0L
+        for (chapter in mediaChapters) {
+            val chapterTitle = chapter.title?.toString()?.takeIf { it.isNotBlank() }
+                ?: "Chapter ${result.size + 1}"
+            result.add(Chapter(title = chapterTitle, startPositionMs = startMs))
+            startMs += chapter.durationMs
+        }
+        return result
     }
 }
