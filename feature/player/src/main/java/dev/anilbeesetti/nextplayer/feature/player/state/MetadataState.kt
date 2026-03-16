@@ -46,16 +46,15 @@ class MetadataState(private val player: Player) {
     }
 
     private fun extractChapters(): List<Chapter> {
-        val mediaChapters = player.mediaMetadata.chapters
-        if (mediaChapters.isNullOrEmpty()) return emptyList()
-        val result = mutableListOf<Chapter>()
-        var startMs = 0L
-        for (chapter in mediaChapters) {
-            val chapterTitle = chapter.title?.toString()?.takeIf { it.isNotBlank() }
-                ?: "Chapter ${result.size + 1}"
-            result.add(Chapter(title = chapterTitle, startPositionMs = startMs))
-            startMs += chapter.durationMs
-        }
-        return result
+    val mediaChapters = player.mediaMetadata.chapters
+    if (mediaChapters.isNullOrEmpty()) return emptyList()
+    
+    return mediaChapters.mapNotNull { chapter ->
+        val chapterTitle = chapter.title?.toString()?.takeIf { it.isNotBlank() }
+            ?: "Chapter ${chapter.startTimeMs}"
+        Chapter(
+            title = chapterTitle,
+            startPositionMs = chapter.startTimeMs
+        )
     }
 }
