@@ -273,7 +273,7 @@ fun MediaPlayerScreen(
                                     player = player,
                                     title = metadataState.title ?: "",
                                     videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                                    hasChapters = mediaPresentationState.chapters.isNotEmpty(),
+                                    hasChapters = metadataState.chapters.isNotEmpty(),
                                     onPlaybackSpeedClick = {
                                         controlsVisibilityState.hideControls()
                                         overlayView = OverlayView.PLAYBACK_SPEED
@@ -390,8 +390,8 @@ fun MediaPlayerScreen(
                 player = player,
                 overlayView = overlayView,
                 videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                chapters = mediaPresentationState.chapters,
-                currentChapter = mediaPresentationState.currentChapter,
+                chapters = metadataState.chapters,
+                currentChapter = metadataState.chapters.lastOrNull { it.startPositionMs <= mediaPresentationState.position },
                 onChapterSelected = { chapter ->
                     player.seekTo(chapter.startPositionMs)
                 },
