@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,19 +49,19 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import dev.anilbeesetti.nextplayer.core.model.VideoContentScale
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
 import dev.anilbeesetti.nextplayer.feature.player.LocalUseMaterialYouControls
 import dev.anilbeesetti.nextplayer.feature.player.buttons.LoopButton
 import dev.anilbeesetti.nextplayer.feature.player.buttons.PlayerButton
 import dev.anilbeesetti.nextplayer.feature.player.buttons.ShuffleButton
-import dev.anilbeesetti.nextplayer.feature.player.extensions.drawableRes
 import dev.anilbeesetti.nextplayer.feature.player.extensions.noRippleClickable
+import dev.anilbeesetti.nextplayer.feature.player.state.Chapter
 import dev.anilbeesetti.nextplayer.feature.player.state.MediaPresentationState
 import dev.anilbeesetti.nextplayer.feature.player.state.durationFormatted
 import dev.anilbeesetti.nextplayer.feature.player.state.pendingPositionFormatted
@@ -72,17 +73,16 @@ fun ControlsBottomView(
     modifier: Modifier = Modifier,
     player: Player,
     mediaPresentationState: MediaPresentationState,
-    controlsAlignment: Alignment.Horizontal,
-    videoContentScale: VideoContentScale,
-    isPipSupported: Boolean,
-    onVideoContentScaleClick: () -> Unit,
-    onVideoContentScaleLongClick: () -> Unit,
-    onLockControlsClick: () -> Unit,
-    onPictureInPictureClick: () -> Unit,
-    onRotateClick: () -> Unit,
-    onPlayInBackgroundClick: () -> Unit,
+    currentChapter: Chapter?,
+    hasChapters: Boolean,
+    onChaptersClick: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekEnd: () -> Unit,
+    onRotateClick: () -> Unit,
+    onPlayInBackgroundClick: () -> Unit,
+    onLockControlsClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onSubtitleClick: () -> Unit,
 ) {
     val systemBarsPadding = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
     Column(
@@ -91,14 +91,14 @@ fun ControlsBottomView(
             .padding(horizontal = 8.dp)
             .padding(top = 16.dp)
             .padding(bottom = 16.dp.takeIf { systemBarsPadding.calculateBottomPadding() == 0.dp } ?: 0.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // Time row: position/duration + chapters button + rotate button
         Row(
             modifier = Modifier.padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             var showPendingPosition by rememberSaveable { mutableStateOf(false) }
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.noRippleClickable {
@@ -126,8 +126,37 @@ fun ControlsBottomView(
             }
 
             Spacer(modifier = Modifier.weight(1f))
+
+            // Chapters button — only show if video has chapters
+            if (hasChapters) {
+                PlayerButton(
+                    modifier = Modifier.widthIn(min = 30.dp, max = 140.dp),
+                    onClick = onChaptersClick,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_playlist),
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = currentChapter?.title ?: "Chapters",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            // Rotate button
             PlayerButton(
-                modifier = modifier.size(30.dp),
+                modifier = Modifier.size(30.dp),
                 onClick = onRotateClick,
             ) {
                 Icon(
@@ -137,50 +166,61 @@ fun ControlsBottomView(
                 )
             }
         }
+
+        // Seekbar
         PlayerSeekbar(
             position = mediaPresentationState.position.toFloat(),
             duration = mediaPresentationState.duration.toFloat(),
             onSeek = { onSeek(it.toLong()) },
             onSeekFinished = { onSeekEnd() },
         )
+
+        // Bottom buttons row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, alignment = controlsAlignment),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            PlayerButton(onClick = onLockControlsClick) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_lock_open),
-                    contentDescription = null,
-                )
-            }
-            PlayerButton(
-                onClick = onVideoContentScaleClick,
-                onLongClick = onVideoContentScaleLongClick,
+            // Left group: Lock, Loop, Shuffle, Play in Background
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
-                Icon(
-                    painter = painterResource(videoContentScale.drawableRes()),
-                    contentDescription = null,
-                )
-            }
-            if (isPipSupported) {
-                PlayerButton(onClick = onPictureInPictureClick) {
+                PlayerButton(onClick = onLockControlsClick) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_pip),
+                        painter = painterResource(R.drawable.ic_lock_open),
+                        contentDescription = null,
+                    )
+                }
+                LoopButton(player = player)
+                ShuffleButton(player = player)
+                PlayerButton(onClick = onPlayInBackgroundClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_headset),
                         contentDescription = null,
                     )
                 }
             }
-            PlayerButton(onClick = onPlayInBackgroundClick) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_headset),
-                    contentDescription = null,
-                )
+
+            // Right group: Subtitle, Audio
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlayerButton(onClick = onSubtitleClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_subtitle_track),
+                        contentDescription = null,
+                    )
+                }
+                PlayerButton(onClick = onAudioClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_audio_track),
+                        contentDescription = null,
+                    )
+                }
             }
-            LoopButton(player = player)
-            ShuffleButton(player = player)
         }
     }
 }
@@ -222,7 +262,7 @@ private fun MaterialYouSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
+    onValueChangeFinished: () -> Unit,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val interactionSource = remember { MutableInteractionSource() }
@@ -239,7 +279,6 @@ private fun MaterialYouSlider(
         modifier = modifier.size(24.dp),
         track = { sliderState ->
             val disabledAlpha = 0.4f
-
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -257,7 +296,6 @@ private fun MaterialYouSlider(
                 val leftEnd = (playedPixels - gapHalf).coerceIn(0f, size.width)
                 val rightStart = (playedPixels + gapHalf).coerceIn(0f, size.width)
 
-                // Inactive track left side
                 if (leftEnd > 0f) {
                     drawRoundedRect(
                         offset = Offset(0f, 0f),
@@ -267,8 +305,6 @@ private fun MaterialYouSlider(
                         endCornerRadius = insideCornerRadius,
                     )
                 }
-
-                // Inactive track right side
                 if (rightStart < size.width) {
                     drawRoundedRect(
                         offset = Offset(rightStart, 0f),
@@ -278,8 +314,6 @@ private fun MaterialYouSlider(
                         endCornerRadius = endCornerRadius,
                     )
                 }
-
-                // Active track
                 if (leftEnd > 0f) {
                     drawRoundedRect(
                         offset = Offset(0f, 0f),
@@ -319,9 +353,7 @@ private fun DrawScope.drawRoundedRect(
         bottomLeft = startCorner,
     )
     drawPath(
-        path = Path().apply {
-            addRoundRect(track)
-        },
+        path = Path().apply { addRoundRect(track) },
         color = color,
     )
 }
@@ -333,7 +365,7 @@ private fun SimpleSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
+    onValueChangeFinished: () -> Unit,
 ) {
     Slider(
         value = value,
@@ -343,9 +375,10 @@ private fun SimpleSlider(
         modifier = modifier.height(20.dp),
         thumb = {
             Box(
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier
+                    .size(16.dp)
                     .shadow(4.dp, CircleShape)
-                    .background(Color.White)
+                    .background(Color.White),
             )
         },
         track = {
@@ -354,17 +387,17 @@ private fun SimpleSlider(
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(MaterialTheme.shapes.extraSmall)
-                    .background(Color.White.copy(0.5f))
+                    .background(Color.White.copy(0.5f)),
             ) {
                 if (valueRange.endInclusive > 0f) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(value / valueRange.endInclusive)
                             .height(4.dp)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(MaterialTheme.colorScheme.primary),
                     )
                 }
             }
-        }
+        },
     )
 }
