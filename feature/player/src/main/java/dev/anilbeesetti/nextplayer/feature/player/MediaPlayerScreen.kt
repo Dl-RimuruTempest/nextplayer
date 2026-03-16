@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,7 +51,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import dev.anilbeesetti.nextplayer.core.model.ControlButtonsPosition
 import dev.anilbeesetti.nextplayer.core.model.PlayerPreferences
 import dev.anilbeesetti.nextplayer.core.ui.R as coreUiR
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
@@ -148,6 +146,9 @@ fun MediaPlayerScreen(
     )
     val errorState = rememberErrorState(player = player)
 
+    // True while user is dragging the seekbar
+    var isSeeking by remember { mutableStateOf(false) }
+
     LaunchedEffect(pictureInPictureState.isInPictureInPictureMode) {
         if (pictureInPictureState.isInPictureInPictureMode) {
             controlsVisibilityState.hideControls()
@@ -173,6 +174,7 @@ fun MediaPlayerScreen(
     }
 
     var overlayView by remember { mutableStateOf<OverlayView?>(null) }
+    val pipToastContext = LocalContext.current
 
     CompositionLocalProvider(LocalControlsVisibilityState provides controlsVisibilityState) {
         Box {
@@ -211,8 +213,9 @@ fun MediaPlayerScreen(
                     )
                 }
 
-                if (mediaPresentationState.isBuffering) {
-                    CircularProgressIndicator(
+                // Show buffering spinner only when buffering AND not actively seeking
+                if (mediaPresentationState.isBuffering && !isSeeking) {
+                    androidx.compose.material3.CircularProgressIndicator(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size(72.dp),
@@ -268,14 +271,7 @@ fun MediaPlayerScreen(
                             ) {
                                 ControlsTopView(
                                     title = metadataState.title ?: "",
-                                    onAudioClick = {
-                                        controlsVisibilityState.hideControls()
-                                        overlayView = OverlayView.AUDIO_SELECTOR
-                                    },
-                                    onSubtitleClick = {
-                                        controlsVisibilityState.hideControls()
-                                        overlayView = OverlayView.SUBTITLE_SELECTOR
-                                    },
+                                    videoContentScale = videoZoomAndContentScaleState.videoContentScale,
                                     onPlaybackSpeedClick = {
                                         controlsVisibilityState.hideControls()
                                         overlayView = OverlayView.PLAYBACK_SPEED
@@ -283,6 +279,22 @@ fun MediaPlayerScreen(
                                     onPlaylistClick = {
                                         controlsVisibilityState.hideControls()
                                         overlayView = OverlayView.PLAYLIST
+                                    },
+                                    onPictureInPictureClick = {
+                                        if (!pictureInPictureState.hasPipPermission) {
+                                            Toast.makeText(pipToastContext, coreUiR.string.enable_pip_from_settings, Toast.LENGTH_SHORT).show()
+                                            pictureInPictureState.openPictureInPictureSettings()
+                                        } else {
+                                            pictureInPictureState.enterPictureInPictureMode()
+                                        }
+                                    },
+                                    onVideoContentScaleClick = {
+                                        controlsVisibilityState.showControls()
+                                        videoZoomAndContentScaleState.switchToNextVideoContentScale()
+                                    },
+                                    onVideoContentScaleLongClick = {
+                                        controlsVisibilityState.hideControls()
+                                        overlayView = OverlayView.VIDEO_CONTENT_SCALE
                                     },
                                     onBackClick = onBackClick,
                                 )
@@ -303,39 +315,36 @@ fun MediaPlayerScreen(
                                 enter = fadeIn(),
                                 exit = fadeOut(),
                             ) {
-                                val context = LocalContext.current
                                 ControlsBottomView(
                                     player = player,
                                     mediaPresentationState = mediaPresentationState,
-                                    controlsAlignment = when (playerPreferences.controlButtonsPosition) {
-                                        ControlButtonsPosition.LEFT -> Alignment.Start
-                                        ControlButtonsPosition.RIGHT -> Alignment.End
+                                    currentChapter = mediaPresentationState.currentChapter,
+                                    hasChapters = mediaPresentationState.chapters.isNotEmpty(),
+                                    onChaptersClick = {
+                                        controlsVisibilityState.hideControls()
+                                        overlayView = OverlayView.CHAPTER_SELECTOR
                                     },
-                                    videoContentScale = videoZoomAndContentScaleState.videoContentScale,
-                                    isPipSupported = pictureInPictureState.isPipSupported,
-                                    onSeek = seekGestureState::onSeek,
-                                    onSeekEnd = seekGestureState::onSeekEnd,
+                                    onSeek = { position ->
+                                        isSeeking = true
+                                        seekGestureState.onSeek(position)
+                                    },
+                                    onSeekEnd = {
+                                        isSeeking = false
+                                        seekGestureState.onSeekEnd()
+                                    },
                                     onRotateClick = rotationState::rotate,
                                     onPlayInBackgroundClick = onPlayInBackgroundClick,
                                     onLockControlsClick = {
                                         controlsVisibilityState.showControls()
                                         controlsVisibilityState.lockControls()
                                     },
-                                    onVideoContentScaleClick = {
-                                        controlsVisibilityState.showControls()
-                                        videoZoomAndContentScaleState.switchToNextVideoContentScale()
-                                    },
-                                    onVideoContentScaleLongClick = {
+                                    onAudioClick = {
                                         controlsVisibilityState.hideControls()
-                                        overlayView = OverlayView.VIDEO_CONTENT_SCALE
+                                        overlayView = OverlayView.AUDIO_SELECTOR
                                     },
-                                    onPictureInPictureClick = {
-                                        if (!pictureInPictureState.hasPipPermission) {
-                                            Toast.makeText(context, coreUiR.string.enable_pip_from_settings, Toast.LENGTH_SHORT).show()
-                                            pictureInPictureState.openPictureInPictureSettings()
-                                        } else {
-                                            pictureInPictureState.enterPictureInPictureMode()
-                                        }
+                                    onSubtitleClick = {
+                                        controlsVisibilityState.hideControls()
+                                        overlayView = OverlayView.SUBTITLE_SELECTOR
                                     },
                                 )
                             }
@@ -382,6 +391,11 @@ fun MediaPlayerScreen(
                 player = player,
                 overlayView = overlayView,
                 videoContentScale = videoZoomAndContentScaleState.videoContentScale,
+                chapters = mediaPresentationState.chapters,
+                currentChapter = mediaPresentationState.currentChapter,
+                onChapterSelected = { chapter ->
+                    player.seekTo(chapter.startPositionMs)
+                },
                 onDismiss = { overlayView = null },
                 onSelectSubtitleClick = onSelectSubtitleClick,
                 onSubtitleOptionEvent = viewModel::onSubtitleOptionEvent,
@@ -483,7 +497,6 @@ fun PlayerControlsView(
             Spacer(modifier = Modifier.weight(1f))
             bottomView()
         }
-
         middleView()
     }
 }
