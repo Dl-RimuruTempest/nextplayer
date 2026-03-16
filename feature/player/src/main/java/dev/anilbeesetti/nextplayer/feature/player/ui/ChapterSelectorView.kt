@@ -15,11 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import dev.anilbeesetti.nextplayer.core.ui.components.NextSegmentedListItem
 import dev.anilbeesetti.nextplayer.feature.player.state.Chapter
 import dev.anilbeesetti.nextplayer.feature.player.extensions.formatted
 import kotlin.time.Duration.Companion.milliseconds
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BoxScope.ChapterSelectorView(
     show: Boolean,
