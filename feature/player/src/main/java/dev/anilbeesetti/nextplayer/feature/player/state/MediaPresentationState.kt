@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.listen
 import androidx.media3.common.util.UnstableApi
 import dev.anilbeesetti.nextplayer.feature.player.extensions.formatted
@@ -17,6 +18,11 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+data class Chapter(
+    val title: String,
+    val startPositionMs: Long,
+)
 
 @UnstableApi
 @Composable
@@ -46,9 +52,16 @@ class MediaPresentationState(
     var isBuffering: Boolean by mutableStateOf(false)
         private set
 
+    var chapters: List<Chapter> by mutableStateOf(emptyList())
+        private set
+
+    val currentChapter: Chapter?
+        get() = chapters.lastOrNull { it.startPositionMs <= position }
+
     suspend fun observe() {
         updatePosition()
         updateDuration()
+        updateChapters()
         isPlaying = player.isPlaying
         isLoading = player.isLoading
         isBuffering = player.playbackState == Player.STATE_BUFFERING
@@ -63,6 +76,7 @@ class MediaPresentationState(
                         )
                     ) {
                         updateDuration()
+                        updateChapters()
                     }
 
                     if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED)) {
@@ -98,6 +112,40 @@ class MediaPresentationState(
 
     private fun updateDuration() {
         duration = player.duration.coerceAtLeast(0L)
+    }
+
+    private fun updateChapters() {
+        val metadata = player.mediaMetadata
+        val chapterList = mutableListOf<Chapter>()
+        val count = metadata.extras?.getInt("chapter_count", 0) ?: 0
+        if (count > 0) {
+            for (i in 0 until count) {
+                val title = metadata.extras?.getString("chapter_title_$i") ?: "Chapter ${i + 1}"
+                val startMs = metadata.extras?.getLong("chapter_start_$i") ?: continue
+                chapterList.add(Chapter(title = title, startPositionMs = startMs))
+            }
+        }
+        // Also try reading from chapter cue points via the timeline
+        if (chapterList.isEmpty()) {
+            try {
+                val timeline = player.currentTimeline
+                if (!timeline.isEmpty) {
+                    val periodCount = timeline.periodCount
+                    if (periodCount > 1) {
+                        val period = Timeline.Period()
+                        for (i in 0 until periodCount) {
+                            timeline.getPeriod(i, period)
+                            val title = period.id?.toString() ?: "Chapter ${i + 1}"
+                            val startMs = period.positionInWindowUs / 1000
+                            if (startMs >= 0) {
+                                chapterList.add(Chapter(title = title, startPositionMs = startMs))
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        chapters = chapterList
     }
 }
 
