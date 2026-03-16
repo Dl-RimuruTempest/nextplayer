@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.media3.common.Player
-import androidx.media3.common.Timeline
 import androidx.media3.common.listen
 import androidx.media3.common.util.UnstableApi
 import dev.anilbeesetti.nextplayer.feature.player.extensions.formatted
@@ -18,11 +17,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-data class Chapter(
-    val title: String,
-    val startPositionMs: Long,
-)
 
 @UnstableApi
 @Composable
@@ -52,16 +46,9 @@ class MediaPresentationState(
     var isBuffering: Boolean by mutableStateOf(false)
         private set
 
-    var chapters: List<Chapter> by mutableStateOf(emptyList())
-        private set
-
-    val currentChapter: Chapter?
-        get() = chapters.lastOrNull { it.startPositionMs <= position }
-
     suspend fun observe() {
         updatePosition()
         updateDuration()
-        updateChapters()
         isPlaying = player.isPlaying
         isLoading = player.isLoading
         isBuffering = player.playbackState == Player.STATE_BUFFERING
@@ -76,7 +63,6 @@ class MediaPresentationState(
                         )
                     ) {
                         updateDuration()
-                        updateChapters()
                     }
 
                     if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED)) {
@@ -112,34 +98,6 @@ class MediaPresentationState(
 
     private fun updateDuration() {
         duration = player.duration.coerceAtLeast(0L)
-    }
-
-    private fun updateChapters() {
-    try {
-        val metadata = player.currentMediaMetadata
-
-        val chapterList = mutableListOf<Chapter>()
-
-        metadata.extras?.let { bundle ->
-            val chapterTitles = bundle.getStringArrayList("chapter_titles")
-            val chapterTimes = bundle.getLongArray("chapter_times")
-
-            if (chapterTitles != null && chapterTimes != null) {
-                for (i in chapterTitles.indices) {
-                    chapterList.add(
-                        Chapter(
-                            title = chapterTitles[i],
-                            startPositionMs = chapterTimes[i]
-                        )
-                    )
-                }
-            }
-        }
-
-        chapters = if (chapterList.size > 1) chapterList else emptyList()
-
-    } catch (_: Exception) {
-        chapters = emptyList()
     }
 }
 
